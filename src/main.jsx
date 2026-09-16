@@ -11,6 +11,16 @@ const NT = [
  ["1 John",5],["2 John",1],["3 John",1],["Jude",1],["Revelation",22]
 ];
 const TOTAL_NT = 357;
+const THEMES = [
+  {id:"warm", name:"Warm Bible", icon:"🤎", colors:"Beige • Brown • Cream"},
+  {id:"sage", name:"Sage", icon:"🌿", colors:"Sage Green • Cream"},
+  {id:"navy", name:"Navy & Gold", icon:"💙", colors:"Navy • Cream • Gold"},
+  {id:"midnight", name:"Midnight Gold", icon:"🖤", colors:"Black • Cream • Gold"},
+  {id:"blue", name:"Peaceful Blue", icon:"🩵", colors:"Soft Blue • White"},
+  {id:"terracotta", name:"Terracotta", icon:"🧡", colors:"Terracotta • Cream"},
+  {id:"plum", name:"Classic Plum", icon:"🟣", colors:"Purple • Cream"}
+];
+const isTheme = value => THEMES.some(t => t.id === value);
 const qFields = [
  ["keyVerse","Key verse","Which verse stands out to you?"],
  ["summary","What happens in this chapter?","Summarize the chapter in your own words."],
@@ -32,7 +42,8 @@ const save = (k,v) => localStorage.setItem(k,JSON.stringify(v));
 function formatDate(s){ if(!s)return ""; const [y,m,d]=s.split("-"); return `${d}/${m}/${y}`; }
 
 function App(){
- const [dark,setDark] = useState(()=>load("bbs_dark",false));
+ const [dark,setDark] = useState(()=>!!load("bbs_dark",false));
+ const [theme,setTheme] = useState(()=>{const t=load("bbs_theme","warm"); return isTheme(t)?t:"warm"});
  const [days,setDays] = useState(()=>load("bbs_days",[]));
  const [nt,setNt] = useState(()=>load("bbs_nt",{}));
  const [page,setPage] = useState("home");
@@ -42,6 +53,7 @@ function App(){
  const [editorTarget,setEditorTarget] = useState(null);
 
  useEffect(()=>save("bbs_dark",dark),[dark]);
+ useEffect(()=>save("bbs_theme",theme),[theme]);
  useEffect(()=>save("bbs_days",days),[days]);
  useEffect(()=>save("bbs_nt",nt),[nt]);
  useEffect(()=>{ if(toast){const t=setTimeout(()=>setToast(""),2200);return()=>clearTimeout(t)}},[toast]);
@@ -77,19 +89,19 @@ function App(){
    setNt(prev=>{const a=prev[book]||[];const next=a.includes(ch)?a.filter(x=>x!==ch):[...a,ch].sort((x,y)=>x-y);return {...prev,[book]:next}});
  }
  function backup(){
-   const data={app:"Bitaniya Bible Study",version:2,createdAt:new Date().toISOString(),days,nt,dark};
+   const data={app:"Bitaniya Bible Study",version:3,createdAt:new Date().toISOString(),days,nt,dark,theme};
    return JSON.stringify(data,null,2);
  }
  function restore(raw){
    try{
     const x=JSON.parse(raw);
     if(x.app!=="Bitaniya Bible Study" || !Array.isArray(x.days) || typeof x.nt!=="object") throw 0;
-    setDays(x.days);setNt(x.nt);setDark(!!x.dark);setToast("Backup restored successfully.");
+    setDays(x.days);setNt(x.nt);setDark(!!x.dark);setTheme(isTheme(x.theme)?x.theme:"warm");setToast("Backup restored successfully.");
    }catch{setToast("That backup is not valid.")}
  }
  const nav = p => {setPage(p);setMenu(false);window.scrollTo(0,0)};
 
- return <div className={dark?"app dark":"app"}>
+ return <div className={`app theme-${theme}${dark?" dark":""}`}>
    <header className="topbar">
     <button className="iconbtn mobile-menu" onClick={()=>setMenu(!menu)}><I.Menu/></button>
     <button className="brand" onClick={()=>nav("home")}>Bitaniya Bible Study</button>
@@ -116,7 +128,7 @@ function App(){
     {page==="search" && <Search days={days}/>}
     {page==="calendar" && <Calendar days={days} select={(d)=>{setSelectedDate(d);nav("study")}}/>}
     {page==="nt" && <NTTracker nt={nt} toggle={toggleNT} progress={progress} selected={ntSelected}/>}
-    {page==="settings" && <Settings dark={dark} setDark={setDark}/>}
+    {page==="settings" && <Settings dark={dark} setDark={setDark} theme={theme} setTheme={setTheme}/>}
     {page==="characters" && <Characters days={days}/>}
     {page==="bookmarks" && <Filtered days={days} type="bookmarked"/>}
     {page==="favorites" && <Filtered days={days} type="favorite"/>}
@@ -254,7 +266,25 @@ function Calendar({days,select}){const [cursor,setCursor]=useState(new Date());c
 
 function NTTracker({nt,toggle,progress,selected}){const [open,setOpen]=useState({});return <section><div className="pagehead"><h1>New Testament Tracker</h1><button className="iconbtn" title="Choose date"><I.Calendar/></button></div><Card className="reading"><I.BookOpenCheck/><div className="grow"><b>Reading progress</b><div className="progress"><span style={{width:`${progress}%`}}/></div><small>{selected} of 357 chapters selected</small></div><strong>{progress}%</strong></Card>{NT.map(([book,n])=><Card className="nt-book" key={book}><button className="nt-title" onClick={()=>setOpen({...open,[book]:!open[book]})}><span className="circle">{(nt[book]||[]).length}</span><b>{book}</b><small>{(nt[book]||[]).length} / {n} chapters</small>{open[book]?<I.ChevronUp/>:<I.ChevronDown/>}</button>{open[book]&&<div className="chapter-grid">{Array.from({length:n},(_,i)=>i+1).map(c=><button key={c} className={(nt[book]||[]).includes(c)?"chosen":""} onClick={()=>toggle(book,c)}>{c}</button>)}</div>}</Card>)}</section>}
 
-function Settings({dark,setDark}){return <section><div className="pagehead"><h1>Settings</h1></div><Card className="setting"><div className="setting-icon">{dark?<I.DarkMode/>:<I.SunMedium/>}</div><div className="grow"><b>Dark mode</b><small>{dark?"Dark theme is currently enabled":"Light theme is currently enabled"}</small></div><input type="checkbox" checked={dark} onChange={e=>setDark(e.target.checked)}/></Card></section>}
+function Settings({dark,setDark,theme,setTheme}){
+ return <section>
+  <div className="pagehead"><h1>Settings</h1></div>
+  <Card className="setting">
+   <div className="setting-icon">{dark?<I.Moon/>:<I.SunMedium/>}</div>
+   <div className="grow"><b>Dark mode</b><small>{dark?"Dark theme is currently enabled":"Light theme is currently enabled"}</small></div>
+   <input type="checkbox" checked={dark} onChange={e=>setDark(e.target.checked)} aria-label="Toggle dark mode"/>
+  </Card>
+  <div className="section-title theme-title"><h2>Theme</h2><small>Choose your Bible Study colors</small></div>
+  <div className="theme-grid">
+   {THEMES.map(t=><button key={t.id} type="button" className={`theme-card ${theme===t.id?"selected":""} theme-preview-${t.id}`} onClick={()=>setTheme(t.id)} aria-pressed={theme===t.id}>
+    <span className="theme-swatch"><span></span><span></span><span></span></span>
+    <span className="theme-name">{t.icon} {t.name}</span>
+    <span className="theme-colors">{t.colors}</span>
+    {theme===t.id && <span className="theme-check"><I.Check/></span>}
+   </button>)}
+  </div>
+ </section>
+}
 
 function Characters({days}){const chars=days.flatMap(d=>d.chapters.map(c=>({d,c}))).filter(x=>x.c.characterName);return <section><div className="pagehead"><h1>Character Library</h1></div>{chars.length?chars.map(x=><Card key={x.c.id}><div className="list-row"><I.UserRound/><div className="grow"><b>{x.c.characterName}</b><small>{x.c.reference||"Chapter"} • {formatDate(x.d.date)}</small><p>{strip(x.c.characterLessons||x.c.characterIdentity).slice(0,180)}</p></div></div></Card>):<Empty icon={<I.UserRound/>} title="No characters yet" text="Characters recorded in saved studies will appear here."/>}</section>}
 function Filtered({days,type}){const all=days.flatMap(d=>d.chapters.map(c=>({d,c}))).filter(x=>type==="bookmarked"?x.c.bookmarked:x.c.favorite);return <section><div className="pagehead"><h1>{type==="bookmarked"?"Bookmarks":"Favorites"}</h1></div>{all.length?all.map(x=><Card key={x.c.id}><b>{x.c.reference||"Untitled chapter"}</b><small>{formatDate(x.d.date)}</small><p>{strip(x.c.summary||x.c.keyVerse).slice(0,180)}</p></Card>):<Empty icon={type==="bookmarked"?<I.Bookmark/>:<I.Star/>} title={type==="bookmarked"?"No bookmarks yet":"No favorites yet"} text="Saved chapters will appear here."/>}</section>}
